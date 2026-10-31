@@ -1,0 +1,736 @@
+name": "dio-store",
+  "version": "3.0.0",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18.0.0" },
+  "dependencies": {
+    "discord.js-selfbot-v13": "^3.7.1",
+    "express": "^4.19.2",
+    "https-proxy-agent": "^9.1.0",
+    "socks-proxy-agent": "^10.1.0",
+    "dotenv": "^17.4.2",
+    "libsodium-wrappers": "^0.8.4",
+    "opusscript": "^0.0.8",
+    "prism-media": "^1.3.5",
+    "tweetnacl": "^1.0.3",
+    "@snazzah/davey": "^0.1.12"ed', '#6b21a8', '#4a1259', '#2d0a4e']);
+
+const cyber = gradientLib.cristal;
+const fire  = gradientLib.passion;
+const ice   = gradientLib.mind;
+const neon  = gradientLib.fruit;
+
+function printBanner() {
+  console.clear();
+  const art = [
+    '',
+    purpleDark('    ████████╗██████╗ ██╗ ██████╗██╗  ██╗██╗   ██╗'),
+    purpleDark('    ╚══██╔══╝██╔══██╗██║██╔════╝██║ ██╔╝╚██╗ ██╔╝'),
+    purpleDark('       ██║   ██████╔╝██║██║     █████╔╝  ╚████╔╝ '),
+    purpleDark('       ██║   ██╔══██╗██║██║     ██╔═██╗   ╚██╔╝  '),
+    purpleDark('       ██║   ██║  ██║██║╚██████╗██║  ██╗   ██║   '),
+    purpleDark('       ╚═╝   ╚═╝  ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝   ╚═╝   '),
+    '',
+    purpleDark('  ╔═══════════════════════════════════════════════════════════════════╗'),
+    purpleDark('  ║') + neon('                  T R I A L   T R I G G E R   V 2                  ') + purpleDark('║'),
+    purpleDark('  ╠═══════════════════════════════════════════════════════════════════╣'),
+    purpleDark('  ║') + ice('           Discord Selfbot  ·  Humanizer  ·  Voice Stayer          ') + purpleDark('║'),
+    purpleDark('  ╠═══════════════════════════════════════════════════════════════════╣'),
+    purpleDark('  ║') + cyber('    [+] Reply Chain  ·  [+] 24/7 Voice Stay  ·  [+] Proxy Rotation ') + purpleDark('║'),
+    purpleDark('  ║') + cyber('    [+] Multi-Account  ·  [+] Auto Reconnect  ·  [+] Anti-Detect   ') + purpleDark('║'),
+    purpleDark('  ╚═══════════════════════════════════════════════════════════════════╝'),
+    '',
+  ];
+  art.forEach(line => console.log(line));
+}
+
+function log(type, msg) {
+  const tags = {
+    info:  neon('[INFO]    '),
+    ok:    neon('[OK]      '),
+    warn:  fire('[WARN]    '),
+    err:   fire('[ERROR]   '),
+    voice: ice('[VOICE]   '),
+    chat:  cyber('[CHAT]    '),
+    ready: neon('[READY]   '),
+  };
+  console.log(`${tags[type] || neon('[?]       ')}${msg}`);
+}
+
+function ask(rl, question) {
+  return new Promise(resolve => rl.question(cyber(question), answer => resolve(answer.trim())));
+}
+
+function loadTokens() {
+  const filePath = path.join(__dirname, 'input', 'tokens.txt');
+  if (!fs.existsSync(filePath)) {
+    fs.mkdirSync(path.join(__dirname, 'input'), { recursive: true });
+    fs.writeFileSync(filePath, '# Discord tokens - one per line\n', 'utf8');
+    log('warn', 'input/tokens.txt not found — created empty file');
+    return [];
+  }
+  return fs.readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !l.startsWith('#'));
+}
+
+function loadProxies() {
+  const filePath = path.join(__dirname, 'input', 'proxies.txt');
+  if (!fs.existsSync(filePath)) {
+    fs.mkdirSync(path.join(__dirname, 'input'), { recursive: true });
+    fs.writeFileSync(filePath, '# Proxy list - one per line\n# Format: protocol://ip:port or protocol://user:pass@ip:port\n', 'utf8');
+    return [];
+  }
+  return fs.readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !l.startsWith('#'));
+}
+
+function removeProxy(proxyUrl) {
+  const filePath = path.join(__dirname, 'input', 'proxies.txt');
+  if (!fs.existsSync(filePath)) return;
+  const lines = fs.readFileSync(filePath, 'utf8')
+    .split(/\r?\n/)
+    .filter(l => l.trim() !== proxyUrl && l.trim() !== '# Proxy list - one per line' && l.trim() !== '# Format: protocol://ip:port or protocol://user:pass@ip:port' && !l.startsWith('# Proxy') && !l.startsWith('# Format'));
+  fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
+  log('warn', `Removed dead proxy: ${proxyUrl}`);
+}
+
+function createProxyAgent(proxyUrl) {
+  if (!proxyUrl) return undefined;
+  try {
+    if (proxyUrl.startsWith('socks4://') || proxyUrl.startsWith('socks5://')) {
+      return new SocksProxyAgent(proxyUrl);
+    }
+    return new HttpsProxyAgent(proxyUrl);
+  } catch (err) {
+    log('err', `Failed to create proxy agent for ${proxyUrl}: ${err.message}`);
+    return undefined;
+  }
+}
+
+function getNextProxy(currentProxy, proxies, proxyIndex) {
+  if (proxies.length === 0) return { proxy: null, index: proxyIndex };
+  const nextIndex = (proxyIndex + 1) % proxies.length;
+  return { proxy: proxies[nextIndex], index: nextIndex };
+}
+
+async function inputChatChannel(rl) {
+  log('info', 'Enter the Channel ID where tokens will chat.\n');
+  let channelId = '';
+  while (!channelId) {
+    channelId = await ask(rl, '  CHAT CHANNEL ID > ');
+    if (!channelId) log('warn', 'Channel ID required.\n');
+  }
+  log('ok', `Chat channel: ${channelId}\n`);
+  return channelId;
+}
+
+async function inputVoiceChannels(rl) {
+  log('info', 'Enter Voice Channel IDs (comma-separated).\n');
+  let channels = [];
+  while (channels.length === 0) {
+    const raw = await ask(rl, '  VOICE CHANNELS > ');
+    channels = raw.split(',').map(id => id.trim()).filter(Boolean);
+    if (channels.length === 0) log('warn', 'Enter at least one voice channel ID.\n');
+  }
+  log('ok', `${channels.length} voice channel(s) loaded\n`);
+  return channels;
+}
+
+async function inputYesNo(rl, label) {
+  log('info', `${label}? (yes/no)\n`);
+  const raw = await ask(rl, `  ${label} > `);
+  const yes = raw.toLowerCase().startsWith('y');
+  log('ok', `${label}: ${yes ? 'yes' : 'no'}\n`);
+  return yes;
+}
+
+async function inputChatDelay(rl) {
+  log('info', 'Chat message delay in seconds (between each reply).\n');
+  let delay = 0;
+  while (delay <= 0) {
+    const raw = await ask(rl, '  CHAT DELAY (sec) > ');
+    delay = parseInt(raw, 10);
+    if (isNaN(delay) || delay <= 0) { log('warn', 'Enter a valid number > 0.\n'); delay = 0; }
+  }
+  log('ok', `Chat delay: ${delay}s\n`);
+  return delay;
+}
+
+function printSummary(cfg) {
+  const w = 58;
+  const hr = '═'.repeat(w);
+  const stripAnsi = (s) => s.replace(/\x1B\[[0-9;]*m/g, '');
+  const pad = (text, len) => text + ' '.repeat(Math.max(0, len - stripAnsi(text).length));
+
+  const voiceInfo = cfg.voiceChannels.length === 1
+    ? `${cfg.voiceChannels.length} channel (all bots)`
+    : `${cfg.voiceChannels.length} channels (split ${Math.ceil(cfg.tokens.length / cfg.voiceChannels.length)} per)`;
+
+  console.log(cyber(`  ╔${hr}╗`));
+  console.log(cyber('  ║') + neon(pad('CONFIGURATION', w)) + cyber('║'));
+  console.log(cyber(`  ╠${hr}╣`));
+  console.log(cyber('  ║') + pad(`  Tokens:        ${neon(String(cfg.tokens.length).padStart(3))} account(s)`, w) + cyber('║'));
+  console.log(cyber('  ║') + pad(`  Proxies:       ${cfg.useProxy ? neon(String(cfg.proxies.length).padStart(3)) + ' loaded' : fire('OFF ')}`, w) + cyber('║'));
+  console.log(cyber('  ║') + pad(`  Chat Channel:  ${ice(cfg.chatChannel)}`, w) + cyber('║'));
+  console.log(cyber('  ║') + pad(`  Voice:         ${ice(voiceInfo)}`, w) + cyber('║'));
+  console.log(cyber('  ║') + pad(`  Deafen:        ${cfg.deafen ? neon('YES') : fire('NO ')}`, w) + cyber('║'));
+  console.log(cyber('  ║') + pad(`  Mute:          ${cfg.mute ? neon('YES') : fire('NO ')}`, w) + cyber('║'));
+  console.log(cyber('  ║') + pad(`  Chat Delay:    ${neon(String(cfg.chatDelay).padStart(3))} sec(s)`, w) + cyber('║'));
+  console.log(cyber('  ║') + pad(`  Reply Chain:   ${cfg.tokens.length < 2 ? fire('OFF (need 2+)') : neon('ACTIVE')}`, w) + cyber('║'));
+  console.log(cyber(`  ╚${hr}╝`));
+  console.log('');
+}
+
+function humanDelay() {
+  return 1000 + Math.floor(Math.random() * 4000);
+}
+
+const CHAT_PHRASES = {
+  greetings: ['yo', 'hey', 'heyy', 'hi', 'sup', 'whats up', 'wsp', 'hii', 'hello', 'yooo', 'ayy', 'yo yo', 'wsg', 'gm', 'evening'],
+  casual: ['lmao', 'fr', 'ngl', 'bruh', 'smh', 'lol', 'lowkey', 'highkey', 'no way', 'deadass', 'istg', 'tf', 'bro what', 'thats wild', 'thats crazy', 'i cant', 'im done', 'true true', 'real', 'on god', 'bet', 'say less', 'facts', 'valid', 'sheesh', 'nah fr', 'that\'s cap', 'no cap', 'bussin', 'slaps'],
+  questions: ['wbu', 'wdyt', 'anyone here', 'what y\'all doing', 'anyone up', 'whats good', 'anyone wanna talk', 'whats popping', 'yall play anything', 'whats the move', 'who else is up', 'what\'s everyone up to', 'anyone bored', 'what\'s good'],
+  reactions: ['haha', 'sheesh', 'damn', 'lol true', 'yeah for real', 'i feel that', 'real', 'same', 'mood', 'based', 'thats so cool', 'no way fr', 'thats fire', 'thats nice'],
+  replies: ['nah bc that', 'wait really', 'no way fr', 'thats what im saying', 'exactly', 'you get it', 'for real tho', 'thats what im thinking', 'ngl yeah', 'broo yes', 'i was just about to say that', 'ok but fr', 'you took the words out my mouth', 'same energy', 'thats literally me', 'wait that reminds me', 'bro stop', 'lmaooo', 'im screaming', 'you aint wrong'],
+  openers: ['anyone wanna chat', 'yo is anyone here', 'whats good yall', 'gm everyone', 'who all is up', 'whats the vibe today', 'ayy whats poppin', 'hello hello', 'evening yall'],
+};
+
+const PERSONALITIES = [
+  { name: 'Chill',   style: 'casual',    typoChance: 0.05 },
+  { name: 'Hype',    style: 'greetings', typoChance: 0.03 },
+  { name: 'Lurker',  style: 'reactions', typoChance: 0.02 },
+  { name: 'Chatter', style: 'questions', typoChance: 0.04 },
+  { name: 'Vibe',    style: 'openers',   typoChance: 0.03 },
+];
+
+function assignPersonality(i) { return PERSONALITIES[i % PERSONALITIES.length]; }
+function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randomDelay(base) { return base + Math.floor(Math.random() * base * 0.8); }
+
+function maybeAddTypo(text, chance) {
+  if (Math.random() > chance) return text;
+  const typos = [
+    [/(.)\1{2,}/g, (_, c) => c.repeat(2)],
+    [/\bthe\b/gi, () => 'teh'], [/\byou\b/gi, () => 'u'],
+    [/\bto\b/gi, () => '2'], [/\bfor\b/gi, () => '4'],
+    [/\bthat\b/gi, () => 'dat'], [/\bwhat\b/gi, () => 'wut'],
+    [/\bbecause\b/gi, () => 'bc'], [/\bgoing\b/gi, () => 'goin'],
+    [/\bwith\b/gi, () => 'w/'],
+  ];
+  const [pattern, replacer] = randomFrom(typos);
+  return text.replace(pattern, replacer);
+}
+
+function generateRandomReply(personality) {
+  let msg;
+  if (Math.random() < 0.5) {
+    msg = randomFrom(CHAT_PHRASES.replies);
+  } else {
+    msg = randomFrom([...CHAT_PHRASES[personality.style], ...CHAT_PHRASES.casual]);
+  }
+  if (Math.random() < 0.3) msg = `${msg} ${randomFrom(CHAT_PHRASES.casual)}`;
+  msg = maybeAddTypo(msg, personality.typoChance);
+  if (Math.random() < 0.15) msg = msg.toUpperCase();
+  if (Math.random() < 0.2) msg = msg.charAt(0).toUpperCase() + msg.slice(1);
+  if (Math.random() < 0.25) {
+    const emojis = ['😭', '💀', '😂', '🔥', '✅', '💯', '👀', '🤣'];
+    msg = `${msg} ${randomFrom(emojis)}`;
+  }
+  return msg;
+}
+
+function generateRandomOpener(personality) {
+  if (Math.random() < 0.5) return randomFrom(CHAT_PHRASES.openers);
+  return randomFrom([...CHAT_PHRASES[personality.style], ...CHAT_PHRASES.greetings]);
+}
+
+const SILENCE_FRAME = Buffer.from([0xf8, 0xff, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+class VoiceStayer {
+  constructor(client, channelId, proxyAgent) {
+    this.client = client;
+    this.channelId = channelId;
+    this.proxyAgent = proxyAgent;
+    this.connection = null;
+    this.silenceTimer = null;
+    this.destroyed = false;
+    this.retries = 0;
+    this.maxRetries = 999;
+    this.heartbeatTimer = null;
+    this.connected = false;
+    this.lastReconnect = 0;
+  }
+
+  async join() {
+    if (this.destroyed) return;
+    if (this.connection && this.connected) return;
+    try {
+      const channel = this.client.channels.cache.get(this.channelId);
+      if (!channel) {
+        log('warn', `${this.client.user.tag} | Channel ${this.channelId} not found, retrying...`);
+        this.scheduleReconnect();
+        return;
+      }
+      const fetched = await channel.fetch().catch(() => null);
+      if (!fetched || fetched.type !== 'GUILD_VOICE') {
+        log('err', `${this.client.user.tag} | ${this.channelId} is not a voice channel`);
+        return;
+      }
+      log('voice', `${this.client.user.tag} joining ${fetched.name}...`);
+      const joinOptions = {
+        selfMute: globalCfg.mute,
+        selfDeaf: globalCfg.deafen,
+        selfVideo: false,
+        group: this.client.user.id,
+      };
+      if (this.proxyAgent) {
+        joinOptions.agent = this.proxyAgent;
+      }
+      this.connection = await this.client.voice.joinChannel(fetched, joinOptions);
+      this.connected = true;
+      log('voice', `${this.client.user.tag} connected to ${fetched.name}`);
+      this.retries = 0;
+      this.startSilence();
+      this.startHeartbeat();
+      this.connection.on('closing', () => {
+        log('warn', `${this.client.user.tag} voice connection closing...`);
+        this.connected = false;
+        this.cleanup();
+      });
+      this.connection.on('closed', (reason) => {
+        log('warn', `${this.client.user.tag} voice disconnected: ${reason || 'unknown'}`);
+        this.connected = false;
+        this.cleanup();
+        if (!this.destroyed) this.scheduleReconnect();
+      });
+      this.connection.on('error', (err) => {
+        log('err', `${this.client.user.tag} voice error: ${err.message}`);
+        if (err.message.includes('ECONNRESET') || err.message.includes('ETIMEDOUT')) {
+          this.connected = false;
+          this.cleanup();
+          if (!this.destroyed) this.scheduleReconnect();
+        }
+      });
+      this.connection.on('speaking', () => {});
+    } catch (err) {
+      this.retries++;
+      log('warn', `${this.client.user.tag} voice join failed (attempt ${this.retries}): ${err.message}`);
+      const delay = Math.min(this.retries * 5000, 30000);
+      setTimeout(() => this.join(), delay);
+    }
+  }
+
+  startHeartbeat() {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.destroyed) return;
+      if (!this.connection || !this.connected) {
+        log('warn', `${this.client.user.tag} voice: not connected, reconnecting...`);
+        this.cleanup();
+        this.scheduleReconnect();
+        return;
+      }
+      try {
+        if (this.connection.player && this.connection.status === 4) {
+          this.connection.player.play(SILENCE_FRAME, { type: 'opus' });
+        }
+      } catch {}
+    }, 30_000);
+  }
+
+  stopHeartbeat() { if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; } }
+
+  startSilence() {
+    this.stopSilence();
+    this.silenceTimer = setInterval(() => {
+      if (this.connection?.status === 4 && this.connection.player && this.connected) {
+        try { this.connection.player.play(SILENCE_FRAME, { type: 'opus' }); } catch {}
+      }
+    }, 5_000);
+  }
+
+  stopSilence() { if (this.silenceTimer) { clearInterval(this.silenceTimer); this.silenceTimer = null; } }
+
+  scheduleReconnect() {
+    if (this.destroyed) return;
+    const now = Date.now();
+    if (now - this.lastReconnect < 5000) return;
+    this.lastReconnect = now;
+    const delay = 3000 + Math.floor(Math.random() * 5000);
+    log('info', `${this.client.user.tag} voice reconnecting in ${Math.round(delay/1000)}s...`);
+    setTimeout(() => this.join(), delay);
+  }
+
+  cleanup() {
+    this.stopSilence();
+    this.stopHeartbeat();
+    this.connection = null;
+    this.connected = false;
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.stopSilence();
+    this.stopHeartbeat();
+    if (this.connection) { this.connection.disconnect(); this.connection = null; }
+    this.connected = false;
+  }
+}
+
+let globalCfg = {};
+
+async function main() {
+  printBanner();
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+  const tokens = loadTokens();
+  if (tokens.length === 0) {
+    log('err', 'No tokens found in input/tokens.txt');
+    log('info', 'Add one token per line in input/tokens.txt');
+    rl.close();
+    return;
+  }
+  log('ok', `Loaded ${tokens.length} token(s) from tokens.txt\n`);
+
+  const proxies = loadProxies();
+  log('info', `Loaded ${proxies.length} proxy(ies) from input/proxies.txt`);
+  const useProxy = proxies.length > 0 ? await inputYesNo(rl, 'USE PROXIES') : false;
+  if (useProxy && proxies.length < tokens.length) {
+    log('warn', `Only ${proxies.length} proxy(ies) for ${tokens.length} accounts — some will share or run direct`);
+  }
+  console.log('');
+
+  const chatChannel   = await inputChatChannel(rl);
+  const voiceChannels = await inputVoiceChannels(rl);
+  const deafen        = await inputYesNo(rl, 'DEAFEN');
+  const mute          = await inputYesNo(rl, 'MUTE');
+  const chatDelay     = await inputChatDelay(rl);
+
+  rl.close();
+
+  globalCfg = { tokens, chatChannel, voiceChannels, deafen, mute, chatDelay, proxies, useProxy };
+  printSummary(globalCfg);
+
+  if (tokens.length < 2) {
+    log('info', 'Only 1 token — chat disabled (need 2+ for reply chain)');
+  } else {
+    log('info', `Reply chain: ${tokens.length} accounts will take turns`);
+  }
+
+  const botList = [];
+  let chatLocked = false;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const personality = assignPersonality(i);
+    const voiceStayers = [];
+    const proxyUrl = useProxy ? proxies[i % proxies.length] : null;
+    const proxyAgent = createProxyAgent(proxyUrl);
+    const clientOptions = {
+      checkUpdate: false,
+      rest: {
+        timeout: 30000,
+        retries: 3,
+        offset: Math.floor(Math.random() * 5000),
+      },
+      ws: {
+        largeThreshold: 50,
+        version: 9,
+      },
+    };
+    if (proxyAgent) {
+      clientOptions.rest.agent = proxyAgent;
+      clientOptions.ws.agent = proxyAgent;
+      log('info', `Account #${i + 1} using proxy: ${proxyUrl}`);
+    }
+    const client = new Client(clientOptions);
+    client._proxyUrl = proxyUrl;
+    client._proxyIndex = i % proxies.length;
+    client._proxyAgent = proxyAgent;
+    client._tokenIndex = i;
+    botList.push({ client, personality, voiceStayers });
+
+    if (i > 0) {
+      const stagger = 15000 + Math.floor(Math.random() * 20000);
+      log('info', `Waiting ${Math.round(stagger/1000)}s before next account...`);
+      await new Promise(r => setTimeout(r, stagger));
+    }
+
+    client.on('ready', async () => {
+      log('ready', `${client.user.tag} logged in [${personality.name}]`);
+      if (voiceStayers.length === 0) {
+        const baseDelay = useProxy ? 25_000 : 12_000;
+        await new Promise(r => setTimeout(r, baseDelay + Math.floor(Math.random() * 10_000)));
+        const voiceChannels = globalCfg.voiceChannels;
+        if (voiceChannels.length === 1) {
+          const stayer = new VoiceStayer(client, voiceChannels[0], proxyAgent);
+          voiceStayers.push(stayer);
+          await stayer.join();
+        } else {
+          const assignedChannel = voiceChannels[i % voiceChannels.length];
+          log('info', `${client.user.tag} assigned to voice channel: ${assignedChannel}`);
+          const stayer = new VoiceStayer(client, assignedChannel, proxyAgent);
+          voiceStayers.push(stayer);
+          await stayer.join();
+        }
+      } else {
+        log('info', `${client.user.tag} reconnecting to voice channel...`);
+        await new Promise(r => setTimeout(r, 5000 + Math.floor(Math.random() * 5000)));
+        for (const stayer of voiceStayers) {
+          stayer.connected = false;
+          await stayer.join();
+        }
+      }
+    });
+
+    client.on('disconnect', () => {
+      log('warn', `${client.user?.tag || '?'} disconnected`);
+      for (const stayer of voiceStayers) {
+        stayer.connected = false;
+        stayer.cleanup();
+      }
+      if (!client.destroyed && !client._banned) {
+        setTimeout(async () => {
+          if (!client._banned) {
+            log('info', `${client.user?.tag || '?'} attempting reconnect...`);
+            try {
+              await client.login(token);
+            } catch (err) {
+              log('err', `Re-login failed: ${err.message}`);
+              if (useProxy && client._proxyUrl) {
+                log('warn', `Proxy ${client._proxyUrl} may be dead — rotating...`);
+                removeProxy(client._proxyUrl);
+                const { proxy: newProxy } = getNextProxy(client._proxyUrl, proxies, client._proxyIndex);
+                if (newProxy) {
+                  client._proxyUrl = newProxy;
+                  const newAgent = createProxyAgent(newProxy);
+                  if (newAgent) {
+                    client._proxyAgent = newAgent;
+                    client.options.rest.agent = newAgent;
+                    client.options.ws.agent = newAgent;
+                  }
+                  log('info', `Retrying with new proxy: ${newProxy}`);
+                  setTimeout(() => client.login(token).catch(() => {}), 3000);
+                }
+              }
+            }
+          }
+        }, 10_000 + Math.floor(Math.random() * 5000));
+      }
+    });
+
+    client.on('error', (err) => {
+      log('err', `${client.user?.tag || '?'}: ${err.message}`);
+      if (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('invalid token')) {
+        log('warn', `${client.user?.tag || '?'} TOKEN INVALIDATED — account may be disabled/banned`);
+        log('warn', `Stopping reconnection attempts for this account`);
+        client._banned = true;
+        client.destroy().catch(() => {});
+      } else if ((err.message.includes('ECONNREFUSED') || err.message.includes('ETIMEDOUT') || err.message.includes('ECONNRESET') || err.message.includes('proxy')) && useProxy && client._proxyUrl) {
+        log('warn', `Proxy ${client._proxyUrl} failed — removing and rotating...`);
+        removeProxy(client._proxyUrl);
+        const { proxy: newProxy } = getNextProxy(client._proxyUrl, proxies, client._proxyIndex);
+        if (newProxy) {
+          client._proxyUrl = newProxy;
+          const newAgent = createProxyAgent(newProxy);
+          if (newAgent) {
+            client._proxyAgent = newAgent;
+            client.options.rest.agent = newAgent;
+            client.options.ws.agent = newAgent;
+          }
+          log('info', `Rotated to proxy: ${newProxy}`);
+        }
+      }
+    });
+
+    try {
+      await client.login(token);
+    } catch (err) {
+      log('err', `Account #${i + 1} login failed: ${err.message}`);
+      if (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('invalid token')) {
+        log('warn', `Account #${i + 1} token is invalid — skipping this account`);
+        client._banned = true;
+      } else if ((err.message.includes('ECONNREFUSED') || err.message.includes('ETIMEDOUT') || err.message.includes('proxy') || err.message.includes('ECONNRESET')) && useProxy && client._proxyUrl) {
+        log('warn', `Proxy ${client._proxyUrl} failed — removing and rotating...`);
+        removeProxy(client._proxyUrl);
+        const { proxy: newProxy } = getNextProxy(client._proxyUrl, proxies, client._proxyIndex);
+        if (newProxy) {
+          client._proxyUrl = newProxy;
+          const newAgent = createProxyAgent(newProxy);
+          if (newAgent) {
+            client._proxyAgent = newAgent;
+            client.options.rest.agent = newAgent;
+            client.options.ws.agent = newAgent;
+          }
+          log('info', `Retrying with proxy: ${newProxy}`);
+          setTimeout(() => {
+            if (!client._banned) {
+              client.login(token).catch(e => log('err', `Retry login failed: ${e.message}`));
+            }
+          }, 5_000);
+        }
+      } else {
+        setTimeout(() => {
+          if (!client._banned) {
+            client.login(token).catch(e => log('err', `Retry login failed: ${e.message}`));
+          }
+        }, 30_000);
+      }
+    }
+  }
+
+  if (tokens.length >= 2) {
+    while (botList.some(b => !b.client.user)) await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 3_000));
+
+    log('chat', 'Starting reply chain...');
+    log('chat', `Accounts: ${botList.filter(b => !b.client._banned).map(b => b.client.user.tag).join(', ')}`);
+
+    const activeBots = botList.filter(b => !b.client._banned);
+    if (activeBots.length < 2) {
+      log('warn', 'Need at least 2 active accounts for reply chain — chat disabled');
+    } else {
+      const chain = { lastBotIndex: -1, lastMessage: null };
+      const history = [];
+
+      const openerBot = activeBots[0];
+      chain.lastBotIndex = 0;
+    const channel = openerBot.client.channels.cache.get(globalCfg.chatChannel);
+
+    if (channel) {
+      let opener = generateRandomOpener(openerBot.personality);
+      try {
+        try { channel.startTyping(); } catch {}
+        await new Promise(r => setTimeout(r, Math.min(opener.length * 80, 2500)));
+        let retryCount = 0;
+        const maxRetries = 3;
+        while (retryCount < maxRetries) {
+          try {
+            chain.lastMessage = await channel.send(opener);
+            break;
+          } catch (sendErr) {
+            retryCount++;
+            if (sendErr.message.includes('401') || sendErr.message.includes('Unauthorized')) {
+              log('warn', `401 on opener send — token may be invalidated`);
+              openerBot.client._banned = true;
+              throw sendErr;
+            } else {
+              throw sendErr;
+            }
+          }
+        }
+        history.push({ author: openerBot.client.user.tag, text: opener });
+        log('chat', `${openerBot.client.user.tag}: ${opener}`);
+      } catch (err) {
+        log('err', `Opener failed: ${err.message}`);
+      }
+    }
+
+    const baseDelay = globalCfg.chatDelay * 1000;
+
+    const doReply = async () => {
+      if (chatLocked) return;
+      chatLocked = true;
+      try {
+        const currentActive = activeBots.filter(b => !b.client._banned);
+        if (currentActive.length < 2) {
+          log('warn', 'Not enough active accounts — stopping chat');
+          chatLocked = false;
+          return;
+        }
+
+        if (Math.random() < 0.25) {
+          log('chat', '[skipped turn — natural behavior]');
+          chatLocked = false;
+          return;
+        }
+
+        const available = currentActive.filter((_, idx) => idx !== chain.lastBotIndex);
+        if (available.length === 0) {
+          chatLocked = false;
+          return;
+        }
+        const nextBot = available[Math.floor(Math.random() * available.length)];
+        const ch = nextBot.client.channels.cache.get(globalCfg.chatChannel);
+        if (!ch) {
+          log('err', `${nextBot.client.user.tag} can't find chat channel`);
+          chatLocked = false;
+          return;
+        }
+
+        let msg = generateRandomReply(nextBot.personality);
+
+        try { ch.startTyping(); } catch {}
+        const typingDelay = 1000 + Math.floor(Math.random() * 4000) + Math.min(msg.length * 50, 2000);
+        await new Promise(r => setTimeout(r, typingDelay));
+
+        let retryCount = 0;
+        const maxRetries = 3;
+        while (retryCount < maxRetries) {
+          try {
+            if (chain.lastMessage) {
+              chain.lastMessage = await ch.send({
+                content: msg,
+                reply: { messageReference: chain.lastMessage.id },
+              });
+            } else {
+              chain.lastMessage = await ch.send(msg);
+            }
+            break;
+          } catch (sendErr) {
+            retryCount++;
+            if (sendErr.message.includes('401') || sendErr.message.includes('Unauthorized')) {
+              log('warn', `401 on send — token may be invalidated`);
+              nextBot.client._banned = true;
+              throw sendErr;
+            } else {
+              throw sendErr;
+            }
+          }
+        }
+
+        chain.lastBotIndex = currentActive.indexOf(nextBot);
+        history.push({ author: nextBot.client.user.tag, text: msg });
+        if (history.length > 30) history.splice(0, history.length - 30);
+
+        log('chat', `[${chain.lastBotIndex + 1}/${currentActive.length}] ${nextBot.client.user.tag} → ${msg}`);
+      } catch (err) {
+        log('err', `Reply failed: ${err.message}`);
+      }
+      chatLocked = false;
+    };
+
+    const getRandomDelay = () => {
+      const min = baseDelay * 0.5;
+      const max = baseDelay * 2;
+      return Math.floor(min + Math.random() * (max - min));
+    };
+
+    setTimeout(async () => {
+      await doReply();
+      const scheduleNext = async () => {
+        const nextDelay = getRandomDelay();
+        setTimeout(async () => {
+          await doReply();
+          scheduleNext();
+        }, nextDelay);
+      };
+      scheduleNext();
+    }, getRandomDelay());
+    }
+  }
+
+  console.log('');
+  console.log(purpleDark('  ╔═══════════════════════════════════════════════════════════════════╗'));
+  console.log(purpleDark('  ║') + neon('                 T R I A L   T R I G G E R   V 2                   ') + purpleDark('║'));
+  console.log(purpleDark('  ║') + ice('                    ALL BOTS LAUNCHED — RUNNING                    ') + purpleDark('║'));
+  console.log(purpleDark('  ║') + cyber('                  Press Ctrl+C to stop                             ') + purpleDark('║'));
+  console.log(purpleDark('  ╚═══════════════════════════════════════════════════════════════════╝'));
+  console.log('');
+}
+
+main().catch(err => { log('err', `Fatal: ${err.message}`); process.exit(1); });

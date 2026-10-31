@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DIO STORE</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grid"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+
+<header>
+  <h1 class="logo" data-text="DIO STORE">DIO STORE</h1>
+  <p class="sub">TRIAL <span>TRIGGER</span> V2</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>⚡ CONFIG</h2>
+    <textarea id="tokens" placeholder="Paste Discord tokens — one per line" rows="3"></textarea>
+    <textarea id="proxies" placeholder="Proxies (optional) — http://ip:port" rows="2"></textarea>
+    <label class="chk"><input type="checkbox" id="useProxy" checked> Use proxies</label>
+    <input id="chatChannel" placeholder="Chat Channel ID">
+    <input id="voiceChannels" placeholder="Voice Channel IDs (comma-separated)">
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="deafen" checked> Deafen</label>
+      <label class="chk"><input type="checkbox" id="mute"> Mute</label>
+      <input type="number" id="chatDelay" value="5" min="1" placeholder="Delay">
+    </div>
+    <div class="btns">
+      <button id="startBtn" class="btn go">▶ START</button>
+      <button id="stopBtn" class="btn stop" disabled>■ STOP</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>📊 STATS</h2>
+    <div class="stats">
+      <div class="stat"><b id="sMsg">0</b><span>MSGS</span></div>
+      <div class="stat"><b id="sJoin">0</b><span>JOINS</span></div>
+      <div class="stat"><b id="sErr">0</b><span>ERRORS</span></div>
+    </div>
+    <div class="pill" id="pill">● OFFLINE</div>
+    <div class="bots" id="bots"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>📜 LOGS</h2>
+    <div class="logs" id="logs"></div>
+  </section>
+</main>
+
+<footer>DIO STORE © 2026</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let polling = null;
+
+$('startBtn').onclick = async () => {
+  const btn = $('startBtn');
+  btn.disabled = true; btn.textContent = '⏳ STARTING';
+  try {
+    const res = await fetch('/api/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tokens: $('tokens').value,
+        proxies: $('proxies').value,
+        useProxy: $('useProxy').checked,
+        chatChannel: $('chatChannel').value.trim(),
+        voiceChannels: $('voiceChannels').value.split(',').map(x => x.trim()).filter(Boolean),
+        deafen: $('deafen').checked,
+        mute: $('mute').checked,
+        chatDelay: parseInt($('chatDelay').value) || 5,
+      })
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error);
+    $('stopBtn').disabled = false;
+    startPolling();
+  } catch (e) { alert('Error: ' + e.message); btn.disabled = false; }
+  btn.textContent = '▶ START';
+};
+
+$('stopBtn').onclick = async () => {
+  await fetch('/api/stop', { method: 'POST' });
+  $('startBtn').disabled = false; $('stopBtn').disabled = true;
+  if (polling) clearInterval(polling);
+};
+
+function renderLogs(logs) {
+  const el = $('logs');
+  el.innerHTML = logs.map(l =>
+    `<div class="log ${l.type}"><span class="t">${new Date(l.ts).toLocaleTimeString()}</span> ${escapeHtml(l.msg)}</div>`
+  ).join('');
+  el.scrollTop = el.scrollHeight;
+}
+const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+async function poll() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    $('pill').textContent = d.running ? '● ONLINE' : '● OFFLINE';
+    $('pill').className = 'pill ' + (d.running ? 'on' : 'off');
+    $('sMsg').textContent = d.stats.msgs;
+    $('sJoin').textContent = d.stats.joins;
+    $('sErr').textContent = d.stats.errors;
+    $('bots').innerHTML = d.bots.map(b =>
+      `<div class="bot ${b.banned ? 'bad' : b.voice ? 'good' : ''}">
+        <span>${b.p}</span><b>${b.tag}</b>
+        ${b.voice ? '<i>🎙</i>' : ''}${b.banned ? '<i>❌</i>' : ''}
+      </div>`
+    ).join('');
+    renderLogs(d.logs);
+    if (d.running) $('stopBtn').disabled = false;
+  } catch {}
+}
+
+function startPolling() { if (polling) clearInterval(polling); polling = setInterval(poll, 2000); }
+poll();
+startPolling();
+</script>
+</body>
+</html>
